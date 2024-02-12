@@ -10,7 +10,7 @@ const apiLimiter = rateLimit({
   // Maksimum istek sayısını belirle
   max: (req, res) => {
     // İstek URL'sine göre farklı maksimum istek sayıları belirlenebilir
-    if (req.url === "/login" || req.url === "/register" || req.url === "/forget-password") return 10;
+    if (req.url === "/login" || req.url === "/register" || req.url === "/forget-password") return 30;
     else return 100;
   },
   message: {

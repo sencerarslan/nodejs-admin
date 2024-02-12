@@ -24,6 +24,11 @@ const userShema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    role: {
+      type: String,
+      enum: ["user", "admin", "author"],
+      default: "user",
+    },
     reset: {
       code: {
         type: String,
@@ -39,6 +44,6 @@ const userShema = new mongoose.Schema(
 );
 
 // Kullanıcı modelini oluştur
-const user = mongoose.model("users", userShema);
+const userModel = mongoose.model("users", userShema);
 
-module.exports = user;
+module.exports = userModel;

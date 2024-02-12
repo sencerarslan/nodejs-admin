@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
-const user = require("../models/user.model");
+const userModel = require("../models/user.model");
+const permissionModel = require("../models/permission.model");
 const APIError = require("../utils/errors");
 
 // Kullanıcıya JWT oluşturur ve yanıt olarak gönderir
@@ -27,17 +28,49 @@ const tokenCheck = async (req, res, next) => {
 
   await jwt.verify(token, process.env.JWT_SECRET_KEY, async (err, decoded) => {
     if (err) throw new APIError("Geçersiz token.", 401);
-    const userInfo = await user
+    const userInfoPromise = await userModel
       .findById(decoded.sub)
       .collation({ locale: "en", strength: 2 })
-      .select("_id name lastname email");
+      .select("_id name lastname email role");
 
-    if (!userInfo) throw new APIError("Geçersiz token.", 401);
+    if (!userInfoPromise) throw new APIError("Geçersiz token.", 401);
 
-    req.user = userInfo;
+    const permissionInfoPromise = await permissionModel
+      .findOne({ role: userInfoPromise.role })
+      .collation({ locale: "en", strength: 2 })
+      .select("permission");
+
+    const [userInfo, permissionInfo] = await Promise.all([userInfoPromise, permissionInfoPromise]);
+
+    if (!permissionInfo || !permissionInfo.permission) throw new APIError("İzinler bulunamadı.", 403);
+
+    const permissions = JSON.parse(permissionInfo.permission.replace(/'/g, '"'));
+
+    req.user = {
+      ...userInfo.toObject(),
+      permissions: permissions,
+    };
   });
 
   next();
+};
+
+const permissionsCheck = (permissions) => {
+  return async (req, res, next) => {
+    try {
+      const userPermissions = req.user.permissions || []; // Kullanıcının izinlerini al, yoksa boş bir dizi kullan
+      const isAdmin = req.user.role === "admin";
+
+      // Eğer kullanıcı admin değilse ve gerekli izinlerden herhangi birine sahip değilse
+      if (!isAdmin && !permissions.some((permission) => userPermissions.includes(permission))) {
+        throw new APIError("Bu işlemi gerçekleştirmek için yeterli izniniz yok.", 403);
+      }
+
+      next();
+    } catch (error) {
+      next(error); // Hata varsa sonraki middleware'e iletilir
+    }
+  };
 };
 
 // Geçici bir JWT oluşturur ve döndürür
@@ -76,6 +109,7 @@ const decodedTemporaryToken = async (temporaryToken) => {
 module.exports = {
   createToken,
   tokenCheck,
+  permissionsCheck,
   createTemporaryToken,
   decodedTemporaryToken,
 };
